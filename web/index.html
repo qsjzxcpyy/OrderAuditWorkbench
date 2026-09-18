@@ -1,0 +1,134 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f1e9">
+  <title>审单工作台 | Order Audit</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-lockup">
+      <span class="brand-mark" aria-hidden="true">OR</span>
+      <div>
+        <p class="eyebrow">LOCAL WORKSPACE</p>
+        <h1>审单工作台</h1>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span class="local-badge"><span class="status-dot" aria-hidden="true"></span>127.0.0.1 · 仅本机处理</span>
+      <button class="button button-quiet" id="reset-button" type="button"><span aria-hidden="true">↻</span> 重新开始</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="workflow-rail" aria-label="处理流程">
+      <div class="rail-heading">
+        <span class="eyebrow">RUNBOOK 01</span>
+        <h2>处理流程</h2>
+      </div>
+      <ol class="stage-list">
+        <li class="stage-item is-active" data-stage="upload">
+          <span class="stage-number">01</span>
+          <div><strong>导入文件</strong><small id="rail-file-count">等待文件</small></div>
+        </li>
+        <li class="stage-item" data-stage="review">
+          <span class="stage-number">02</span>
+          <div><strong>人工处理</strong><small id="rail-manual-count">等待审单</small></div>
+        </li>
+        <li class="stage-item" data-stage="pass">
+          <span class="stage-number">03</span>
+          <div><strong>可放行</strong><small id="rail-pass-count">等待审单</small></div>
+        </li>
+      </ol>
+      <div class="rail-note">
+        <span class="note-label">AUDIT CONTRACT</span>
+        <p>订单命中多个规则时全部显示；价格差异 ≤ 3 视为相同。</p>
+      </div>
+    </aside>
+
+    <section class="workspace" aria-label="审单工作区">
+      <section class="runbook-stack" id="upload" aria-label="审单步骤">
+        <article class="step-card is-current" id="erp-step">
+          <div class="step-header">
+            <div class="step-number">01</div>
+            <div class="step-heading"><p class="eyebrow">SOURCE / ERP EXPORT</p><h3>上传 ERP 订单文件</h3></div>
+            <span class="step-state" id="upload-state">等待文件</span>
+          </div>
+          <p class="step-description">使用今天从 ERP 下载的订单记录表。系统会读取有效工作表，并按订单号匹配店铺信息。</p>
+          <div class="upload-row">
+            <label class="file-picker erp-zone" for="erp-file">
+              <span class="file-icon">XLSX</span>
+              <span class="file-copy"><strong id="erp-file-label">未选择文件</strong><small>必需文件 · 只支持 .xlsx</small></span>
+              <span class="file-action">选择文件 <b aria-hidden="true">→</b></span>
+              <input id="erp-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </label>
+          </div>
+        </article>
+
+        <article class="step-card" id="inventory-step">
+          <div class="step-header">
+            <div class="step-number">02</div>
+            <div class="step-heading"><p class="eyebrow">SOURCE / INVENTORY</p><h3>加入店铺库存文件</h3></div>
+            <span class="step-state step-state-muted">按需添加</span>
+          </div>
+          <p class="step-description">可一次选择多个库存文件。文件名能识别店铺时会自动匹配，无法识别的文件请手动选择店铺。</p>
+          <div class="inventory-layout">
+            <label class="file-picker inventory-zone" for="inventory-file">
+              <span class="file-icon file-icon-plus">＋</span>
+              <span class="file-copy"><strong>加入库存文件</strong><small>支持多选 · 文件只在本机读取</small></span>
+              <span class="file-action">添加文件 <b aria-hidden="true">→</b></span>
+              <input id="inventory-file" type="file" multiple accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </label>
+            <div class="file-list" id="file-list" aria-live="polite">
+              <div class="file-row file-row-empty"><span class="file-name">还没有库存文件</span><span class="map-status is-unknown">待加入</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="action-card" id="audit-step">
+          <div class="action-copy"><p class="eyebrow">RUN / AUDIT ENGINE</p><h3>文件准备好后，开始审单</h3><p>系统会汇总云仓 SKU 需求，并把每个订单命中的人工处理原因完整标记出来。</p></div>
+          <div class="ingest-actions"><button class="button button-secondary" id="demo-button" type="button">查看演示数据</button><button class="button button-primary" id="audit-button" type="button" disabled>开始审单 <span aria-hidden="true">→</span></button></div>
+        </article>
+      </section>
+
+      <section class="results-section" id="results" aria-labelledby="results-title">
+        <div class="results-topline">
+          <div><p class="eyebrow">OUTPUT / REVIEW</p><h2 id="results-title">查看审单结果</h2><p class="section-intro">先处理需要人工介入的订单，再展开查看可放行订单。</p></div>
+          <div class="result-actions"><button class="button button-secondary" id="copy-button" type="button" disabled>复制人工订单号</button><a class="button button-primary is-disabled" id="export-button" href="#" download>导出 Excel <span aria-hidden="true">→</span></a></div>
+        </div>
+
+        <div class="result-board">
+          <div class="result-board-header"><span class="eyebrow">CURRENT BATCH</span><span class="batch-status"><span class="status-dot status-dot-blue" aria-hidden="true"></span>等待审单文件</span></div>
+          <div class="kpi-grid" aria-label="审单统计">
+            <article class="kpi-card kpi-total"><span>全部订单</span><strong id="kpi-total">0</strong><small>本次文件</small></article>
+            <article class="kpi-card kpi-manual"><span>人工处理</span><strong id="kpi-manual">0</strong><small>需要到 ERP 复核</small></article>
+            <article class="kpi-card kpi-pass"><span>可放行</span><strong id="kpi-pass">0</strong><small>规则全部通过</small></article>
+            <article class="kpi-card kpi-sku"><span>云仓 SKU</span><strong id="kpi-sku">0</strong><small>已汇总需求</small></article>
+          </div>
+        </div>
+
+        <div class="review-panel">
+          <div class="filter-bar">
+            <label class="search-field"><span aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="搜索订单号、SKU、buyer_id…"></label>
+            <label class="select-field"><span>店铺</span><select id="store-filter"><option value="">全部店铺</option></select></label>
+            <label class="select-field"><span>原因</span><select id="reason-filter"><option value="">全部原因</option></select></label>
+            <label class="select-field"><span>&#35746;&#21333;&#31867;&#22411;</span><select id="presale-filter"><option value="">&#20840;&#37096;&#35746;&#21333;</option><option value="presale">&#20165;&#39044;&#21806;&#35746;&#21333;</option><option value="normal">&#38750;&#39044;&#21806;&#35746;&#21333;</option></select></label>
+          </div>
+          <div class="manual-toolbar"><div><span class="section-dot section-dot-coral"></span><strong>人工处理</strong><span class="section-count" id="manual-section-count">0</span></div><span class="toolbar-note">点击记录展开 · 每条原因单独列出</span></div>
+          <div class="order-list" id="manual-list"></div>
+          <div class="empty-state" id="manual-empty"><span class="empty-icon">✓</span><strong>等待审单结果</strong><small>上传文件并开始审单后，这里会显示需要人工处理的订单。</small></div>
+        </div>
+
+        <div class="pass-section" id="pass-list">
+          <button class="pass-heading" id="pass-toggle" type="button" aria-expanded="false"><span><span class="section-dot section-dot-teal"></span><strong>可放行订单</strong><span class="section-count" id="pass-section-count">0</span></span><span class="pass-heading-action">展开列表 <span class="chevron">⌄</span></span></button>
+          <div class="pass-list" id="pass-orders" hidden></div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
