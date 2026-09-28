@@ -13,6 +13,7 @@ LATEST_SHIP_MANUAL_DAYS = 5
 LATEST_SHIP_REASON = '\u9884\u552e\u8ba2\u5355\uff1a\u6700\u665a\u53d1\u8d27\u65e5\u671f\u8ddd\u5f53\u524d\u65e5\u671f\u8fbe 5 \u5929\u53ca\u4ee5\u4e0a'
 PRESALE_REASON = '\u9884\u552e\u8ba2\u5355'
 PLATFORM_SKU_EXACT_REASON = '\u5e97\u94fa SKU \u672a\u7cbe\u786e\u5339\u914d\uff0c\u9700\u8981\u4eba\u5de5\u786e\u8ba4'
+DUPLICATE_PRODUCT_REASON = '\u540c\u4e00\u7528\u6237\u91cd\u590d\u8d2d\u4e70\u540c\u4e00\u4ea7\u54c1'
 
 
 def normalize_number(value: Any) -> float | None:
@@ -194,6 +195,8 @@ def run_audit(
     demand_by_warehouse: dict[str, float] = defaultdict(float)
     order_sku_qty: dict[tuple[str, str], float] = defaultdict(float)
     buyer_orders: dict[tuple[str, str], set[str]] = defaultdict(set)
+    buyer_product_orders: dict[tuple[str, str], set[str]] = defaultdict(set)
+    buyer_product_line_counts: dict[tuple[str, str], int] = defaultdict(int)
     for line in lines:
         order_no = clean_text(line.get('order_no'))
         warehouse = clean_text(line.get('warehouse_sku'))
@@ -204,6 +207,12 @@ def run_audit(
         buyer_key = (clean_text(line.get('buyer_id')), warehouse)
         if buyer_key[0] and buyer_key[1] and order_no:
             buyer_orders[buyer_key].add(order_no)
+        product = clean_text(line.get('platform_sku')) or warehouse
+        buyer_product_key = (clean_text(line.get('buyer_id')), product)
+        if buyer_product_key[0] and buyer_product_key[1]:
+            buyer_product_line_counts[buyer_product_key] += 1
+            if order_no:
+                buyer_product_orders[buyer_product_key].add(order_no)
 
     inventories: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     inventories_by_warehouse: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -235,7 +244,16 @@ def run_audit(
         buyer_key = (clean_text(line.get('buyer_id')), warehouse)
         duplicate_orders = sorted(buyer_orders.get(buyer_key, set()) - {order_no})
         if duplicate_orders:
-            reasons.append('同一用户重复购买')
+            reasons.append('\u540c\u4e00\u7528\u6237\u91cd\u590d\u8d2d\u4e70')
+        product = clean_text(line.get('platform_sku')) or warehouse
+        buyer_product_key = (clean_text(line.get('buyer_id')), product)
+        duplicate_product_orders = sorted(buyer_product_orders.get(buyer_product_key, set()) - {order_no})
+        repeated_product_purchase = buyer_product_line_counts.get(buyer_product_key, 0) > 1
+        if duplicate_product_orders or repeated_product_purchase:
+            reasons.append(DUPLICATE_PRODUCT_REASON)
+        for duplicate_product_order in duplicate_product_orders:
+            if duplicate_product_order not in duplicate_orders:
+                duplicate_orders.append(duplicate_product_order)
 
         exact_platform_match = bool(inventories.get(_line_key(line), []))
         inventory_match_type = 'exact_platform_sku' if exact_platform_match else 'not_found'

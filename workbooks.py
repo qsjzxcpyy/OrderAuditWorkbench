@@ -30,7 +30,8 @@ def _number(value: Any) -> Any:
 ERP_ALIASES = {
     'order_no': {'refrencenoplatform', 'refrenceno', 'orderno', '订单号', '亚马逊订单号'},
     'seller': {'platformsellerid', '来源店铺', '店铺', 'seller'},
-    'buyer_id': {'buyerid', 'platformbuyerid', '购买者id', '购买者ID'},
+    'buyer_id': {'buyerid', '购买者id', '购买者ID'},
+    'platform_buyer_id': {'platformbuyerid'},
     'date_latest_ship': {'datelatestship'},
     'order_status': {'orderstatus'},
     'custom_order_type': {'customordertype'},
@@ -105,7 +106,9 @@ def _open(path: str | Path):
 def _parse_erp_workbook(workbook, sheet_name: str | None) -> list[dict[str, Any]]:
     ws = _sheet(workbook, sheet_name, ERP_ALIASES)
     header_row, header = _find_header(ws, ERP_ALIASES)
-    missing = [field for field in ('order_no', 'seller', 'buyer_id') if field not in header]
+    missing = [field for field in ('order_no', 'seller') if field not in header]
+    if 'buyer_id' not in header and 'platform_buyer_id' not in header:
+        missing.append('buyer_id')
     if missing:
         raise WorkbookDataError('ERP 文件缺少字段：' + '、'.join(missing))
     all_headers = [str(value or '') for value in next(ws.iter_rows(min_row=header_row, max_row=header_row, values_only=True))]
@@ -139,7 +142,8 @@ def _parse_erp_workbook(workbook, sheet_name: str | None) -> list[dict[str, Any]
         if not order_no:
             continue
         seller = _text(values[header['seller']] if header['seller'] < len(values) else '')
-        buyer_id = _text(values[header['buyer_id']] if header['buyer_id'] < len(values) else '')
+        buyer_column = header.get('buyer_id', header.get('platform_buyer_id'))
+        buyer_id = _text(values[buyer_column] if buyer_column is not None and buyer_column < len(values) else '')
         latest_ship = _text(values[header['date_latest_ship']] if 'date_latest_ship' in header and header['date_latest_ship'] < len(values) else '')
         presale_values = [
             _text(values[index]) for _, index in presale_value_columns

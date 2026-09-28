@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date
 
 from audit_logic import (
     DISTRIBUTION_LOW_STOCK_REASON,
@@ -89,6 +89,44 @@ def test_duplicate_buyer_is_detected_across_sellers():
     assert '同一用户重复购买' in result['orders']['A']['reasons']
     assert result['orders']['A']['duplicate_orders'] == ['B']
 
+
+
+def test_duplicate_buyer_product_is_detected_across_orders_even_when_warehouse_sku_differs():
+    rows = [
+        order('A', platform='SAME-PRODUCT', warehouse='WH-1'),
+        order('B', platform='SAME-PRODUCT', warehouse='WH-2'),
+    ]
+    inventories = {
+        'THRYVIX_US_US': [
+            stock(platform='SAME-PRODUCT', warehouse='WH-1', circle=10),
+            stock(platform='SAME-PRODUCT', warehouse='WH-2', circle=10),
+        ],
+    }
+
+    result = run_audit(rows, inventories)
+
+    assert result['orders']['A']['status'] == 'manual'
+    assert result['orders']['B']['status'] == 'manual'
+    assert '\u540c\u4e00\u7528\u6237\u91cd\u590d\u8d2d\u4e70\u540c\u4e00\u4ea7\u54c1' in result['orders']['A']['reasons']
+    assert result['orders']['A']['duplicate_orders'] == ['B']
+
+
+def test_repeated_platform_product_lines_for_one_buyer_are_detected():
+    rows = [
+        order('A', platform='SAME-PRODUCT', warehouse='WH-1'),
+        order('A', platform='SAME-PRODUCT', warehouse='WH-2'),
+    ]
+    inventories = {
+        'THRYVIX_US_US': [
+            stock(platform='SAME-PRODUCT', warehouse='WH-1', circle=10),
+            stock(platform='SAME-PRODUCT', warehouse='WH-2', circle=10),
+        ],
+    }
+
+    result = run_audit(rows, inventories)
+
+    assert result['orders']['A']['status'] == 'manual'
+    assert '\u540c\u4e00\u7528\u6237\u91cd\u590d\u8d2d\u4e70\u540c\u4e00\u4ea7\u54c1' in result['orders']['A']['reasons']
 
 def test_duplicate_inventory_rows_never_get_summed():
     rows = [order('A')]

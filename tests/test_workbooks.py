@@ -69,6 +69,18 @@ def test_parses_presale_fields_for_audit_rules(tmp_path):
     assert rows[0]['order_desc'] == 'pre-order item'
 
 
+
+def test_parser_prefers_buyer_id_when_empty_platform_buyer_id_is_also_present(tmp_path):
+    path = tmp_path / 'orders.xlsx'
+    make_workbook(path, [
+        ['refrence_no_platform', 'platform_seller_id', 'platform_buyer_id', 'buyer_id', 'sku1', 'warehouse_sku1', 'qty1'],
+        ['ORDER-1', 'THRYVIX_US_US', None, 'buyer-1', 'AMZ-1', 'WH-1', 1],
+    ])
+
+    rows = parse_erp_workbook(path)
+
+    assert rows[0]['buyer_id'] == 'buyer-1'
+
 def test_parses_product_sku_as_platform_sku_alias(tmp_path):
     path = tmp_path / 'inventory.xlsx'
     make_workbook(path, [
