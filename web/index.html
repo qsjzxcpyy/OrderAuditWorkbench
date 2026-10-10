@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -116,9 +116,11 @@
             <label class="select-field"><span>原因</span><select id="reason-filter"><option value="">全部原因</option></select></label>
             <label class="select-field"><span>&#35746;&#21333;&#31867;&#22411;</span><select id="presale-filter"><option value="">&#20840;&#37096;&#35746;&#21333;</option><option value="presale">&#20165;&#39044;&#21806;&#35746;&#21333;</option><option value="normal">&#38750;&#39044;&#21806;&#35746;&#21333;</option></select></label>
           </div>
-          <div class="manual-toolbar"><div><span class="section-dot section-dot-coral"></span><strong>人工处理</strong><span class="section-count" id="manual-section-count">0</span></div><span class="toolbar-note">点击记录展开 · 每条原因单独列出</span></div>
-          <div class="order-list" id="manual-list"></div>
-          <div class="empty-state" id="manual-empty"><span class="empty-icon">✓</span><strong>等待审单结果</strong><small>上传文件并开始审单后，这里会显示需要人工处理的订单。</small></div>
+          <div class="manual-toolbar"><div><span class="section-dot section-dot-coral"></span><strong>人工处理</strong><span class="section-count" id="manual-section-count">0</span></div><button class="manual-toggle" id="manual-toggle" type="button" aria-expanded="true" aria-controls="manual-content"><span class="manual-toggle-label">收起列表</span><span class="chevron" aria-hidden="true">⌄</span></button></div>
+          <div id="manual-content">
+            <div class="order-list" id="manual-list"></div>
+            <div class="empty-state" id="manual-empty"><span class="empty-icon">✓</span><strong>等待审单结果</strong><small>上传文件并开始审单后，这里会显示需要人工处理的订单。</small></div>
+          </div>
         </div>
 
         <div class="pass-section" id="pass-list">

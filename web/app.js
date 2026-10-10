@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   const $ = (selector) => document.querySelector(selector);
   const state = { erpFile: null, inventoryFiles: [], result: null, busy: false };
   const stores = [
@@ -258,6 +258,11 @@
     }
     await copyText(text, '\u5df2\u590d\u5236\u4eba\u5de5\u8ba2\u5355\u53f7');
   };
+  const setManualExpanded = (expanded) => {
+    $('#manual-toggle').setAttribute('aria-expanded', String(expanded));
+    $('#manual-content').hidden = !expanded;
+    $('.manual-toggle-label').textContent = expanded ? '\u6536\u8d77\u5217\u8868' : '\u5c55\u5f00\u5217\u8868';
+  };
   const reset = () => {
     state.erpFile = null;
     state.inventoryFiles = [];
@@ -271,6 +276,7 @@
     $('#manual-list').innerHTML = '';
     $('#pass-orders').innerHTML = '';
     $('#manual-empty').hidden = false;
+    setManualExpanded(true);
     $('#copy-button').disabled = true;
     $('#export-button').classList.add('is-disabled');
     $('#export-button').href = '#';
@@ -303,6 +309,9 @@
   $('#demo-button').addEventListener('click', demo);
   $('#copy-button').addEventListener('click', copyOrders);
   $('#reset-button').addEventListener('click', reset);
+  $('#manual-toggle').addEventListener('click', () => {
+    setManualExpanded($('#manual-toggle').getAttribute('aria-expanded') !== 'true');
+  });
   $('#pass-toggle').addEventListener('click', () => {
     const open = $('#pass-toggle').getAttribute('aria-expanded') === 'true';
     $('#pass-toggle').setAttribute('aria-expanded', String(!open));

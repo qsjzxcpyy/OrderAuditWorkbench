@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import defaultdict
 from copy import deepcopy
@@ -9,8 +9,8 @@ from typing import Any, Iterable
 PRICE_TOLERANCE = 3.0
 DISTRIBUTION_LOW_STOCK_LIMIT = 6.0
 DISTRIBUTION_LOW_STOCK_REASON = '\u5206\u9500\u5e93\u5b58\u5c0f\u4e8e\u7b49\u4e8e 6\uff0c\u9700\u8981\u4eba\u5de5\u63d0\u524d\u4e70\u5165'
-LATEST_SHIP_MANUAL_DAYS = 5
-LATEST_SHIP_REASON = '\u9884\u552e\u8ba2\u5355\uff1a\u6700\u665a\u53d1\u8d27\u65e5\u671f\u8ddd\u5f53\u524d\u65e5\u671f\u8fbe 5 \u5929\u53ca\u4ee5\u4e0a'
+LATEST_SHIP_MANUAL_DAYS = 6
+LATEST_SHIP_REASON = '\u9884\u552e\u8ba2\u5355\uff1a\u6700\u665a\u53d1\u8d27\u65e5\u671f\u8ddd\u5f53\u524d\u65e5\u671f\u8fbe 6 \u5929\u53ca\u4ee5\u4e0a'
 PRESALE_REASON = '\u9884\u552e\u8ba2\u5355'
 PLATFORM_SKU_EXACT_REASON = '\u5e97\u94fa SKU \u672a\u7cbe\u786e\u5339\u914d\uff0c\u9700\u8981\u4eba\u5de5\u786e\u8ba4'
 DUPLICATE_PRODUCT_REASON = '\u540c\u4e00\u7528\u6237\u91cd\u590d\u8d2d\u4e70\u540c\u4e00\u4ea7\u54c1'
