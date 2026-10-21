@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 
 from audit_logic import (
     DISTRIBUTION_LOW_STOCK_REASON,
@@ -198,11 +198,12 @@ def test_exact_platform_sku_match_can_pass_and_is_recorded_in_evidence():
     assert audited['lines'][0]['evidence']['matched_platform_sku'] == 'W2339S80021-th-zy'
 
 
-def test_latest_ship_date_five_days_in_future_is_presale():
+def test_latest_ship_date_six_days_in_future_is_presale():
     rows = [
         order('FIVE_DAYS', date_latest_ship='2026-09-15'),
-        order('FOUR_DAYS', buyer='buyer-2', date_latest_ship='2026-09-14'),
-        order('PAST', buyer='buyer-3', date_latest_ship='2026-09-05'),
+        order('SIX_DAYS', buyer='buyer-2', date_latest_ship='2026-09-16'),
+        order('SEVEN_DAYS', buyer='buyer-3', date_latest_ship='2026-09-17'),
+        order('PAST', buyer='buyer-4', date_latest_ship='2026-09-05'),
     ]
     result = run_audit(
         rows,
@@ -210,21 +211,25 @@ def test_latest_ship_date_five_days_in_future_is_presale():
         today=date(2026, 9, 10),
     )
 
-    assert result['orders']['FIVE_DAYS']['status'] == 'manual'
-    assert result['orders']['FIVE_DAYS']['is_presale'] is True
-    assert LATEST_SHIP_REASON in result['orders']['FIVE_DAYS']['reasons']
-    assert result['orders']['FIVE_DAYS']['latest_ship_age_days'] == 5
+    for name, days in [('SIX_DAYS', 6), ('SEVEN_DAYS', 7)]:
+        audited = result['orders'][name]
+        assert audited['status'] == 'manual'
+        assert audited['is_presale'] is True
+        assert LATEST_SHIP_REASON in audited['reasons']
+        assert audited['latest_ship_age_days'] == days
+        assert '6' in LATEST_SHIP_REASON
 
-    assert result['orders']['FOUR_DAYS']['status'] == 'pass'
-    assert result['orders']['FOUR_DAYS']['is_presale'] is False
-    assert result['orders']['PAST']['status'] == 'pass'
-    assert result['orders']['PAST']['is_presale'] is False
+    for name in ['FIVE_DAYS', 'PAST']:
+        audited = result['orders'][name]
+        assert audited['status'] == 'pass'
+        assert audited['is_presale'] is False
+        assert LATEST_SHIP_REASON not in audited['reasons']
 
 
 def test_latest_ship_date_fallback_applies_to_every_order_without_short_circuiting():
     rows = [
-        order('INVENTORY-MANUAL', date_latest_ship='2026-09-09'),
-        order('DATE-MANUAL', buyer='buyer-2', date_latest_ship='2026-09-15'),
+        order('INVENTORY-MANUAL', date_latest_ship='2026-09-15'),
+        order('DATE-MANUAL', buyer='buyer-2', date_latest_ship='2026-09-16'),
     ]
     result = run_audit(
         rows,
@@ -235,12 +240,14 @@ def test_latest_ship_date_fallback_applies_to_every_order_without_short_circuiti
     assert '圈买库存不足' in result['orders']['INVENTORY-MANUAL']['reasons']
     assert LATEST_SHIP_REASON in result['orders']['DATE-MANUAL']['reasons']
     assert result['summary']['manual_orders'] == 2
+    assert result['orders']['INVENTORY-MANUAL']['is_presale'] is False
+    assert LATEST_SHIP_REASON not in result['orders']['INVENTORY-MANUAL']['reasons']
 
 
 def test_latest_ship_fallback_uses_the_furthest_future_line_date_for_one_order():
     rows = [
         order('MIXED', date_latest_ship='2026-09-11'),
-        order('MIXED', platform='AMZ-2', warehouse='WH-2', date_latest_ship='2026-09-15'),
+        order('MIXED', platform='AMZ-2', warehouse='WH-2', date_latest_ship='2026-09-16'),
     ]
     result = run_audit(
         rows,
@@ -250,19 +257,19 @@ def test_latest_ship_fallback_uses_the_furthest_future_line_date_for_one_order()
 
     assert result['orders']['MIXED']['status'] == 'manual'
     assert LATEST_SHIP_REASON in result['orders']['MIXED']['reasons']
-    assert result['orders']['MIXED']['latest_ship_age_days'] == 5
-    assert result['orders']['MIXED']['date_latest_ship'] == '2026-09-15'
+    assert result['orders']['MIXED']['latest_ship_age_days'] == 6
+    assert result['orders']['MIXED']['date_latest_ship'] == '2026-09-16'
 
 
 def test_latest_ship_date_with_time_uses_calendar_day_difference():
     result = run_audit(
-        [order('TIME-DATE', date_latest_ship='2026-09-15 14:59:59')],
+        [order('TIME-DATE', date_latest_ship='2026-09-16 14:59:59')],
         {'DEMOA_US_US': [stock(circle=99)]},
         today=date(2026, 9, 10),
     )
 
     assert result['orders']['TIME-DATE']['is_presale'] is True
-    assert result['orders']['TIME-DATE']['latest_ship_age_days'] == 5
+    assert result['orders']['TIME-DATE']['latest_ship_age_days'] == 6
 
 
 def test_presale_fields_are_not_used_for_presale_detection():

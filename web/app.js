@@ -92,7 +92,10 @@
     const evidence = line.evidence || {};
     const lineReasons = line.reasons || [];
     return `<div class="evidence-row">
-      <div class="evidence-title"><span class="sku-label">平台 SKU</span><strong>${esc(line.platform_sku || '?')}</strong><span class="sku-cloud">云仓 ${esc(line.warehouse_sku || '?')}</span></div>
+      <div class="sku-identity">
+        <div class="sku-identity-field sku-identity-platform"><span>平台 SKU</span><strong>${esc(line.platform_sku || '未提供')}</strong></div>
+        <div class="sku-identity-field sku-identity-warehouse"><span>云仓 SKU</span><strong>${esc(line.warehouse_sku || '未提供')}</strong></div>
+      </div>
       <div class="evidence-grid">
         ${evidencePill('需求', num(evidence.demand))}
         ${evidencePill('购买数', num(line.qty))}
@@ -108,7 +111,11 @@
     const manual = order.status === 'manual';
     const lines = order.lines || [];
     const reasons = order.reasons || [];
-    const summary = lines.map((line) => `${line.platform_sku || line.warehouse_sku || 'SKU'} × ${num(line.qty)}`).join(' · ');
+    const skuSummary = lines.map((line) => `<span class="summary-sku-line">
+      <span class="summary-sku-field"><span class="summary-sku-label">平台 SKU</span><strong class="summary-sku-platform">${esc(line.platform_sku || '未提供')}</strong></span>
+      <span class="summary-sku-field"><span class="summary-sku-label">云仓 SKU</span><strong class="summary-sku-warehouse">${esc(line.warehouse_sku || '未提供')}</strong></span>
+      <span class="summary-sku-qty">× ${num(line.qty)}</span>
+    </span>`).join('');
     const reasonPreview = manual
       ? reasons.slice(0, 2).map((reason) => `<span class="reason-tag">${esc(reason)}</span>`).join('')
       : '<span class="reason-tag reason-tag-pass">规则全部通过</span>';
@@ -119,7 +126,8 @@
           <span class="order-topline"><button class="order-number copy-order-number" type="button" data-copy-order="${esc(order.order_no)}" title="\u70b9\u51fb\u590d\u5236\u8ba2\u5355\u53f7">${esc(order.order_no)}</button><span class="order-store">${esc(storeLabel(order.seller))}</span>${order.is_presale ? '<span class="order-presale">\u9884\u552e</span>' : ''}</span>
           <span class="order-meta"><span>buyer_id <b>${esc(order.buyer_id || '?')}</b></span><span>${lines.length} 个商品明细</span><span class="detail-status ${manual ? 'manual' : 'pass'}">${statusLabel(order.status)}</span></span>
           <span class="reason-preview">${reasonPreview}</span>
-          <span class="order-footer"><span class="line-summary">${esc(summary || '无商品明细')}</span><span class="expand-hint">展开查看证据 <span aria-hidden="true">⌄</span></span></span>
+          <span class="order-footer"><span class="expand-hint"><span class="expand-hint-text">${manual ? '向上展开详情' : '展开查看证据'}</span><span class="expand-arrow" aria-hidden="true">⌄</span></span></span>
+          <span class="summary-skus">${skuSummary || '<span class="summary-sku-label">无商品明细</span>'}</span>
         </span>
       </summary>
       <div class="order-detail">
@@ -132,7 +140,7 @@
     </details>`;
   };
   const attachOrderInteractions = (container) => {
-    container.addEventListener('click', (event) => {
+    container.onclick = (event) => {
       const copyButton = event.target.closest('[data-copy-order]');
       if (copyButton) {
         event.preventDefault();
@@ -142,10 +150,27 @@
       }
       const summary = event.target.closest('summary.order-summary');
       if (!summary) return;
+      event.preventDefault();
       const current = summary.closest('.order-card');
-      container.querySelectorAll('.order-card[open]').forEach((other) => { if (other !== current) other.open = false; });
-    });
+      const manual = current.classList.contains('manual-card');
+      const anchorTop = summary.getBoundingClientRect().top;
+      const expanded = !current.open;
+      const setExpanded = (item, open) => {
+        item.open = open;
+        item.querySelector('.expand-hint-text').textContent = open
+          ? '收起详情'
+          : (item.classList.contains('manual-card') ? '向上展开详情' : '展开查看证据');
+      };
+      container.querySelectorAll('.order-card[open]').forEach((other) => { if (other !== current) setExpanded(other, false); });
+      setExpanded(current, expanded);
+      if (manual) {
+        // Keep the summary and next order in place as evidence opens above it.
+        const offset = summary.getBoundingClientRect().top - anchorTop;
+        window.scrollBy({ top: offset, behavior: 'instant' });
+      }
+    };
   };
+
   const renderResults = () => {
     const result = state.result;
     if (!result) return;

@@ -186,7 +186,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        length = int(self.headers.get('Content-Length', '0'))
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if length < 0:
+                raise ValueError('negative request length')
+        except ValueError:
+            return self._json(400, {'error': {'message': '无效的上传长度。'}})
         if length > MAX_UPLOAD_BYTES * 6:
             return self._json(413, {'error': {'message': '上传内容过大。'}})
         body = self.rfile.read(length)

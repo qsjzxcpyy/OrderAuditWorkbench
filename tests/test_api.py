@@ -81,3 +81,17 @@ def test_audit_api_returns_results(running_server):
     assert payload['summary']['total_orders'] == 1
     assert payload['orders'][0]['status'] == 'pass'
     assert payload['run_id']
+
+
+@pytest.mark.parametrize("length", ["-1", "abc", "1.5", "", "9" * 5000])
+def test_invalid_content_length_is_rejected_before_read(length):
+    from types import SimpleNamespace
+    from app import Handler
+
+    class UnreadableBody:
+        def read(self, length):
+            pytest.fail("invalid length must not read the request body")
+
+    handler = SimpleNamespace(path="/api/audit", headers={"Content-Length": length},
+                              rfile=UnreadableBody(), _json=lambda status, body: status)
+    assert Handler.do_POST(handler) == 400
