@@ -65,6 +65,8 @@ with sync_playwright() as p:
     assert sku_font == 13
     assert value_font == 14
     assert value_font > sku_font
+    first_order.locator(".sku-identity-warehouse strong").click()
+    page.wait_for_function("document.querySelector('#toast').textContent.includes('\u590d\u5236 SKU')")
 
     manual_toggle.click()
     assert first_order.locator(".order-detail").is_hidden()

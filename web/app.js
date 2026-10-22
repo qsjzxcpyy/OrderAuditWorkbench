@@ -93,8 +93,8 @@
     const lineReasons = line.reasons || [];
     return `<div class="evidence-row">
       <div class="sku-identity">
-        <div class="sku-identity-field sku-identity-platform"><span>平台 SKU</span><strong>${esc(line.platform_sku || '未提供')}</strong></div>
-        <div class="sku-identity-field sku-identity-warehouse"><span>云仓 SKU</span><strong>${esc(line.warehouse_sku || '未提供')}</strong></div>
+        <div class="sku-identity-field sku-identity-platform"><span>平台 SKU</span><strong data-copy-sku="${esc(line.platform_sku || '未提供')}" role="button" tabindex="0" title="点击复制 SKU">${esc(line.platform_sku || '未提供')}</strong></div>
+        <div class="sku-identity-field sku-identity-warehouse"><span>云仓 SKU</span><strong data-copy-sku="${esc(line.warehouse_sku || '未提供')}" role="button" tabindex="0" title="点击复制 SKU">${esc(line.warehouse_sku || '未提供')}</strong></div>
       </div>
       <div class="evidence-grid">
         ${evidencePill('需求', num(evidence.demand))}
@@ -112,8 +112,8 @@
     const lines = order.lines || [];
     const reasons = order.reasons || [];
     const skuSummary = lines.map((line) => `<span class="summary-sku-line">
-      <span class="summary-sku-field"><span class="summary-sku-label">平台 SKU</span><strong class="summary-sku-platform">${esc(line.platform_sku || '未提供')}</strong></span>
-      <span class="summary-sku-field"><span class="summary-sku-label">云仓 SKU</span><strong class="summary-sku-warehouse">${esc(line.warehouse_sku || '未提供')}</strong></span>
+      <span class="summary-sku-field"><span class="summary-sku-label">平台 SKU</span><strong class="summary-sku-platform" data-copy-sku="${esc(line.platform_sku || '未提供')}" role="button" tabindex="0" title="点击复制 SKU">${esc(line.platform_sku || '未提供')}</strong></span>
+      <span class="summary-sku-field"><span class="summary-sku-label">云仓 SKU</span><strong class="summary-sku-warehouse" data-copy-sku="${esc(line.warehouse_sku || '未提供')}" role="button" tabindex="0" title="点击复制 SKU">${esc(line.warehouse_sku || '未提供')}</strong></span>
       <span class="summary-sku-qty">× ${num(line.qty)}</span>
     </span>`).join('');
     const reasonPreview = manual
@@ -141,11 +141,11 @@
   };
   const attachOrderInteractions = (container) => {
     container.onclick = (event) => {
-      const copyButton = event.target.closest('[data-copy-order]');
+      const copyButton = event.target.closest('[data-copy-order], [data-copy-sku]');
       if (copyButton) {
         event.preventDefault();
         event.stopPropagation();
-        copyText(copyButton.dataset.copyOrder, '\u5df2\u590d\u5236\u8ba2\u5355\u53f7');
+        copyText(copyButton.dataset.copySku ?? copyButton.dataset.copyOrder, copyButton.dataset.copySku !== undefined ? '\u5df2\u590d\u5236 SKU' : '\u5df2\u590d\u5236\u8ba2\u5355\u53f7');
         return;
       }
       const summary = event.target.closest('summary.order-summary');
@@ -168,6 +168,13 @@
         const offset = summary.getBoundingClientRect().top - anchorTop;
         window.scrollBy({ top: offset, behavior: 'instant' });
       }
+    };
+    container.onkeydown = (event) => {
+      const copySku = event.target.closest('[data-copy-sku]');
+      if (!copySku || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      copyText(copySku.dataset.copySku, '\u5df2\u590d\u5236 SKU');
     };
   };
 

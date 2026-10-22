@@ -203,6 +203,9 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
 .sku-identity-field { min-width: 0; padding: 7px 10px; border: 1px solid #c9daee; border-radius: 4px; background: #fff; }
 .sku-identity-field span { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .sku-identity-field strong { display: block; color: var(--blue-dark); font: 700 13px/1.4 Consolas, monospace; overflow-wrap: anywhere; user-select: text; }
+.sku-identity-field strong[data-copy-sku], .summary-sku-field strong[data-copy-sku] { cursor: pointer; }
+.sku-identity-field strong[data-copy-sku]:hover, .summary-sku-field strong[data-copy-sku]:hover { text-decoration: underline; text-underline-offset: 2px; }
+.sku-identity-field strong[data-copy-sku]:focus-visible, .summary-sku-field strong[data-copy-sku]:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
 .sku-identity-warehouse { border-left: 3px solid #3b6fa8; background: #f0f6ff; }
 .sku-identity-warehouse strong { color: #173c69; }
 .evidence-grid { margin-top: 9px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
