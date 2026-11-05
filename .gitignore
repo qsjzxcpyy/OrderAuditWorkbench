@@ -27,3 +27,25 @@ node_modules/
 output/
 outputs/
 project.private.config.json
+
+# Local inputs, exports, credentials and distributable bundles
+data/
+inputs/
+private/
+*.private.*
+*.log
+*.pem
+*.key
+*.p12
+*.pfx
+*.zip
+*.7z
+*.exe
+*.dll
+*.pyd
+*.webp
+*.pdf
+.coverage
+htmlcov/
+dist/
+build/

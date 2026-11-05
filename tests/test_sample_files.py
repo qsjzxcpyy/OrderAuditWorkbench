@@ -1,62 +1,90 @@
-import pytest
-from pathlib import Path
-import sys
+"""End-to-end workbook checks using generated, fictional business records."""
+
 from datetime import date
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from audit_logic import run_audit
+import openpyxl
+import pytest
+
 from app import detect_seller_from_filename
+from audit_logic import run_audit
 from workbooks import parse_erp_workbook, parse_inventory_workbook
 
 
-def _sample_dir():
-    pytest.skip("Private business workbooks are not distributed; unit tests generate synthetic inputs")
+@pytest.fixture
+def synthetic_workbooks(tmp_path):
+    erp_path = tmp_path / 'demo-orders.xlsx'
+    erp = openpyxl.Workbook()
+    sheet = erp.active
+    sheet.append([
+        'refrence_no_platform', 'platform_seller_id', 'buyer_id',
+        'date_latest_ship', 'sku1', 'warehouse_sku1', 'qty1',
+    ])
+    for order_no, buyer, qty in [
+        ('DEMO-ORDER-001', 'demo-buyer-001', 1),
+        ('DEMO-ORDER-002', 'demo-buyer-002', 2),
+    ]:
+        sheet.append([
+            order_no, 'DEMOA_US_US', buyer, '2030-01-03',
+            'DEMO-SKU-001', 'DEMO-WH-001', qty,
+        ])
+    erp.save(erp_path)
+    erp.close()
+
+    inventory_path = tmp_path / 'DEMOA-inventory.xlsx'
+    inventory = openpyxl.Workbook()
+    inventory.active.title = 'Notes'
+    inventory.active.append(['Synthetic data only; no business files required.'])
+    sheet = inventory.create_sheet('Inventory')
+    sheet.append([
+        '产品SKU', '云仓发货sku', '圈买库存', '分销库存',
+        '成本价', '当前分销优惠价', '产品名称',
+    ])
+    sheet.append(['DEMO-SKU-001', 'DEMO-WH-001', 4, 8, 10, 12, 'Demo item'])
+    inventory.save(inventory_path)
+    inventory.close()
+    return erp_path, inventory_path
 
 
-def test_provided_sample_files_end_to_end():
-    sample_dir = _sample_dir()
-    order_rows = parse_erp_workbook(sample_dir / 'order-1789089972.xlsx')
-    sellers = sorted({row['seller'] for row in order_rows if row.get('seller')})
-    inventory_by_store = {}
-    for path in sample_dir.glob('*.xlsx'):
-        seller = detect_seller_from_filename(path.name)
-        if seller and seller in sellers:
-            inventory_by_store[seller] = parse_inventory_workbook(path, seller)
-    assert order_rows
-    assert set(inventory_by_store) == set(sellers)
-    result = run_audit(order_rows, inventory_by_store)
-    assert result['summary']['total_orders'] > 0
-    assert result['summary']['total_lines'] > 0
-    assert all(order['status'] in {'manual', 'pass'} for order in result['orders'].values())
-    assert all(order['reasons'] for order in result['orders'].values() if order['status'] == 'manual')
+def test_synthetic_sample_files_end_to_end(synthetic_workbooks):
+    erp_path, inventory_path = synthetic_workbooks
+    seller = detect_seller_from_filename(inventory_path.name)
+    assert seller == 'DEMOA_US_US'
+    rows = parse_erp_workbook(erp_path)
+    inventory = parse_inventory_workbook(inventory_path, seller)
+
+    result = run_audit(rows, {seller: inventory}, today=date(2030, 1, 1))
+
+    assert result['summary']['total_orders'] == 2
+    assert result['summary']['total_lines'] == 2
+    assert result['summary']['manual_orders'] == 1
+    assert result['summary']['pass_orders'] == 1
+    assert result['sku_groups']['DEMO-WH-001']['demand'] == 3
+    assert result['orders']['DEMO-ORDER-002']['reasons'] == ['单个订单购买数量 ≥ 2']
 
 
-def test_inventory_parser_keeps_current_platform_sku_from_multi_sheet_store_file():
-    sample_dir = _sample_dir()
-    inventory_path = next(sample_dir.glob('*DEMOA*.xlsx'))
+def test_inventory_parser_keeps_platform_sku_from_multi_sheet_file(synthetic_workbooks):
+    _, inventory_path = synthetic_workbooks
     rows = parse_inventory_workbook(inventory_path, 'DEMOA_US_US')
-    target = [row for row in rows if row.get('platform_sku') == 'W2339S80021-th-zy']
-    assert target, '???????????????????? SKU????????????'
-    assert target[0]['warehouse_sku'] == 'W2339S80021'
-    assert target[0]['circle_stock'] == 37
 
-def test_provided_target_order_matches_exact_inventory_platform_sku():
-    sample_dir = _sample_dir()
-    order_rows = parse_erp_workbook(sample_dir / 'order-1789089972.xlsx')
-    sellers = sorted({row['seller'] for row in order_rows if row.get('seller')})
-    inventory_by_store = {}
-    for path in sample_dir.glob('*.xlsx'):
-        seller = detect_seller_from_filename(path.name)
-        if seller and seller in sellers:
-            inventory_by_store[seller] = parse_inventory_workbook(path, seller)
+    assert len(rows) == 1
+    assert rows[0]['platform_sku'] == 'DEMO-SKU-001'
+    assert rows[0]['warehouse_sku'] == 'DEMO-WH-001'
+    assert rows[0]['circle_stock'] == 4
 
-    result = run_audit(order_rows, inventory_by_store, today=date(2026, 9, 11))
-    target = result['orders']['112-0000000-0000008']
+
+def test_synthetic_order_matches_exact_inventory_platform_sku(synthetic_workbooks):
+    erp_path, inventory_path = synthetic_workbooks
+    rows = parse_erp_workbook(erp_path)
+    inventory = parse_inventory_workbook(inventory_path, 'DEMOA_US_US')
+    result = run_audit(rows, {'DEMOA_US_US': inventory}, today=date(2030, 1, 1))
+
+    target = result['orders']['DEMO-ORDER-001']
     evidence = target['lines'][0]['evidence']
     assert target['status'] == 'pass'
-    assert '???????' not in target['reasons']
-    assert evidence['matched_platform_sku'] == 'W2339S80021-th-zy'
-    assert evidence['matched_warehouse_sku'] == 'W2339S80021'
-    assert evidence['circle_stock'] == 37
-    assert evidence['distribution_stock'] == 67
+    assert target['reasons'] == []
+    assert evidence['platform_sku_exact_match'] is True
+    assert evidence['matched_platform_sku'] == 'DEMO-SKU-001'
+    assert evidence['matched_warehouse_sku'] == 'DEMO-WH-001'
+    assert evidence['circle_stock'] == 4
+    assert evidence['distribution_stock'] == 8
 

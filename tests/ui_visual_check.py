@@ -7,7 +7,7 @@ ARTIFACTS = ROOT / "tests" / "artifacts"
 ARTIFACTS.mkdir(exist_ok=True)
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True, executable_path=r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+    browser = p.chromium.launch(headless=True, channel="chrome")
     page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
     page.goto(os.environ.get("AUDIT_TEST_URL", "http://127.0.0.1:8793"), wait_until="networkidle")
     assert page.locator("h1").inner_text() == "审单工作台"

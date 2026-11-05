@@ -134,7 +134,7 @@ Expected: server listens on `http://127.0.0.1:8793`.
 
 - [ ] **Step 1: Write a sample-file smoke test**
 
-Locate `order-1788335157.xlsx` and the four `店铺*.xlsx` workbooks under `审单文件`, parse the ERP sample and at least the used inventory sheet for each relevant store, assert a nonzero order count, and assert every result has a status and a human-readable reason list when manual.
+Generate fictional `demo-orders.xlsx` and `DEMOA-inventory.xlsx` workbooks in a temporary test directory. Parse the ERP sample and inventory sheets, assert a nonzero order count, and assert every result has a status and a human-readable reason list when manual. Private input files are not required or distributed.
 
 - [ ] **Step 2: Run it and inspect actual headers**
 
