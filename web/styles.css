@@ -145,6 +145,32 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
 .manual-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
 #manual-content[hidden], #manual-empty[hidden] { display: none !important; }
 .order-list, .pass-list { display: grid; gap: 8px; }
+.sku-group { min-width: 0; display: flex; flex-direction: column; overflow: hidden; overflow-anchor: none; border: 1px solid #b8cce5; border-left: 3px solid #3b6fa8; border-radius: 5px; background: #fff; }
+.sku-group::details-content { order: -1; }
+.sku-group[open], .sku-group:hover { border-color: #8eafd7; }
+.sku-group-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; list-style: none; background: #f8fbff; }
+.sku-group-summary::-webkit-details-marker { display: none; }
+.group-main { min-width: 0; display: grid; gap: 5px; }
+.group-identity { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.group-label { flex-shrink: 0; color: var(--muted); font-size: 10px; }
+.group-sku { min-width: 0; max-width: 100%; padding: 0; border: 0; background: transparent; color: #173c69; font: 700 13px/1.4 Consolas, monospace; text-align: left; overflow-wrap: anywhere; cursor: copy; }
+.group-sku:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+.group-order-count { flex-shrink: 0; padding: 1px 6px; border-radius: 3px; background: #eaf2fc; color: var(--blue-dark); font-size: 11px; font-weight: 600; }
+.group-metrics { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 10px; }
+.group-quantity { color: var(--ink); font: 700 12px/1.4 Consolas, monospace; }
+.group-reasons { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.group-reason { min-width: 0; display: inline-flex; align-items: baseline; gap: 6px; color: var(--coral); font-size: 10px; overflow-wrap: anywhere; }
+.group-reason small { flex-shrink: 0; color: var(--muted); font-size: 10px; }
+.group-more-reasons { color: var(--muted); font-size: 10px; }
+.group-actions { display: grid; justify-items: end; gap: 9px; }
+.group-copy { padding: 5px 8px; border: 1px solid #bfd0e5; border-radius: 4px; background: #fff; color: var(--blue-dark); font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer; }
+.group-copy:hover { border-color: var(--blue); background: #f0f6ff; }
+.group-expand-hint { color: var(--blue-dark); font-size: 10px; white-space: nowrap; }
+.group-arrow { display: inline-block; margin-left: 4px; }
+.sku-group[open] > summary .group-arrow { transform: rotate(180deg); }
+.group-members { min-width: 0; padding: 10px; border-bottom: 1px solid #c9daee; background: #fff; }
+.group-members-label { margin: 0 0 8px; color: var(--muted); font-size: 11px; }
+.group-sku:focus-visible, .group-copy:focus-visible, .sku-group-summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .order-card { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 5px; background: #fff; transition: border-color 160ms ease, box-shadow 160ms ease; }
 .order-card:hover, .order-card[open] { border-color: #a9bfdd; box-shadow: 0 4px 12px rgba(31, 49, 43, .06); }
 .order-card[open] { background: var(--surface); }
@@ -236,6 +262,7 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
 .busy { cursor: progress; }
 
 @media (max-width: 980px) {
+  .filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .topbar { padding: 14px 20px; }
   .app-shell { display: block; }
   .workflow-rail { padding: 17px 20px 0; border-right: 0; }
@@ -272,6 +299,9 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
   .evidence-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 480px) {
+  .sku-group-summary { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 9px 10px; }
+  .group-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .group-members { padding: 7px; }
   .topbar { min-height: 64px; padding: 12px 15px; }
   .brand-mark { width: 31px; height: 31px; font-size: 10px; }
   h1 { font-size: 16px; }

@@ -1,6 +1,6 @@
 (() => {
   const $ = (selector) => document.querySelector(selector);
-  const state = { erpFile: null, inventoryFiles: [], result: null, busy: false };
+  const state = { erpFile: null, inventoryFiles: [], result: null, busy: false, manualGroups: [] };
   const stores = [
     { value: 'DEMOA_US_US', label: 'DEMOA' },
     { value: 'DEMOC_US', label: 'DEMOC' },
@@ -139,8 +139,64 @@
       </div>
     </details>`;
   };
+  const groupManualOrders = (orders) => {
+    const entries = [];
+    const byWarehouse = new Map();
+    for (const order of orders) {
+      const lines = order.lines || [];
+      const skus = new Set(lines.map((line) => String(line.warehouse_sku || '').trim()));
+      // Keep multi-product orders and unknown SKUs intact. Every order is
+      // displayed exactly once, and a shared SKU never joins unrelated items.
+      if (!lines.length || skus.size !== 1 || skus.has('')) {
+        entries.push({ orders: [order] });
+        continue;
+      }
+      const warehouse = skus.values().next().value;
+      let entry = byWarehouse.get(warehouse);
+      if (!entry) {
+        entry = { warehouse, orders: [] };
+        byWarehouse.set(warehouse, entry);
+        entries.push(entry);
+      }
+      entry.orders.push(order);
+    }
+    return entries;
+  };
+  const groupCard = (group, index) => {
+    const { warehouse, orders } = group;
+    const quantities = orders.flatMap((order) => order.lines || []).map((line) => line.qty);
+    const quantity = quantities.every((qty) => qty !== null && qty !== undefined && qty !== '' && Number.isFinite(Number(qty)))
+      ? num(quantities.reduce((total, qty) => total + Number(qty), 0)) : '?';
+    const stores = new Set(orders.map((order) => order.seller));
+    const reasons = new Map();
+    for (const order of orders) {
+      for (const reason of new Set(order.reasons || [])) reasons.set(reason, (reasons.get(reason) || 0) + 1);
+    }
+    const reasonCounts = [...reasons];
+    const reasonTitle = reasonCounts.map(([reason, count]) => `${reason}（${count} 单）`).join('；');
+    return `<details class="sku-group" data-group-index="${index}">
+      <summary class="sku-group-summary">
+        <span class="group-main">
+          <span class="group-identity"><span class="group-label">云仓 SKU</span><button class="group-sku" type="button" data-copy-sku="${esc(warehouse)}" title="点击复制云仓 SKU">${esc(warehouse)}</button><span class="group-order-count">${orders.length} 单</span></span>
+          <span class="group-metrics"><span>购买合计 <strong class="group-quantity">${quantity} 件</strong></span><span>${stores.size} 个店铺</span><span>相同云仓 SKU，集中处理</span></span>
+          <span class="group-reasons" title="${esc(reasonTitle)}">${reasonCounts.slice(0, 2).map(([reason, count]) => `<span class="group-reason">${esc(reason)}<small>${count} 单</small></span>`).join('')}${reasonCounts.length > 2 ? `<span class="group-more-reasons">另 ${reasonCounts.length - 2} 项原因，展开查看</span>` : ''}</span>
+        </span>
+        <span class="group-actions"><button class="group-copy" type="button" data-copy-group="${index}">复制本组订单号</button><span class="group-expand-hint"><span class="group-expand-label">向上展开 ${orders.length} 笔订单</span><span class="group-arrow" aria-hidden="true">⌃</span></span></span>
+      </summary>
+      <div class="group-members"><p class="group-members-label">本组 ${orders.length} 笔订单 · 点击每笔订单查看完整原因和库存</p><div class="order-list">${orders.map(card).join('')}</div></div>
+    </details>`;
+  };
   const attachOrderInteractions = (container) => {
     container.onclick = (event) => {
+      const groupCopy = event.target.closest('[data-copy-group]');
+      if (groupCopy) {
+        event.preventDefault();
+        event.stopPropagation();
+        const orders = state.manualGroups[Number(groupCopy.dataset.copyGroup)]?.orders || [];
+        const numbers = [...new Set(orders.map((order) => order.order_no).filter(Boolean))];
+        if (numbers.length) copyText(numbers.join(' '), `已复制本组 ${numbers.length} 个订单号`);
+        return;
+      }
       const copyButton = event.target.closest('[data-copy-order], [data-copy-sku]');
       if (copyButton) {
         event.preventDefault();
@@ -148,20 +204,28 @@
         copyText(copyButton.dataset.copySku ?? copyButton.dataset.copyOrder, copyButton.dataset.copySku !== undefined ? '\u5df2\u590d\u5236 SKU' : '\u5df2\u590d\u5236\u8ba2\u5355\u53f7');
         return;
       }
-      const summary = event.target.closest('summary.order-summary');
+      const summary = event.target.closest('summary.order-summary, summary.sku-group-summary');
       if (!summary) return;
       event.preventDefault();
-      const current = summary.closest('.order-card');
-      const manual = current.classList.contains('manual-card');
+      const grouped = summary.classList.contains('sku-group-summary');
+      const current = summary.parentElement;
+      const manual = grouped || current.classList.contains('manual-card');
       const anchorTop = summary.getBoundingClientRect().top;
       const expanded = !current.open;
       const setExpanded = (item, open) => {
         item.open = open;
+        if (item.classList.contains('sku-group')) {
+          const size = state.manualGroups[Number(item.dataset.groupIndex)].orders.length;
+          item.querySelector('.group-expand-label').textContent = open ? '收起本组订单' : `向上展开 ${size} 笔订单`;
+          return;
+        }
         item.querySelector('.expand-hint-text').textContent = open
           ? '收起详情'
           : (item.classList.contains('manual-card') ? '向上展开详情' : '展开查看证据');
       };
-      container.querySelectorAll('.order-card[open]').forEach((other) => { if (other !== current) setExpanded(other, false); });
+      const scope = current.closest('.group-members') || container;
+      const selector = grouped ? '.sku-group[open], :scope > .order-card[open]' : '.order-card[open]';
+      scope.querySelectorAll(selector).forEach((other) => { if (other !== current) setExpanded(other, false); });
       setExpanded(current, expanded);
       if (manual) {
         // Keep the summary and next order in place as evidence opens above it.
@@ -171,7 +235,8 @@
     };
     container.onkeydown = (event) => {
       const copySku = event.target.closest('[data-copy-sku]');
-      if (!copySku || (event.key !== 'Enter' && event.key !== ' ')) return;
+      // Native buttons already produce a click for keyboard activation.
+      if (!copySku || copySku.tagName === 'BUTTON' || (event.key !== 'Enter' && event.key !== ' ')) return;
       event.preventDefault();
       event.stopPropagation();
       copyText(copySku.dataset.copySku, '\u5df2\u590d\u5236 SKU');
@@ -204,7 +269,8 @@
     const visible = orders.filter(matches);
     const manual = visible.filter((order) => order.status === 'manual');
     const pass = visible.filter((order) => order.status === 'pass');
-    $('#manual-list').innerHTML = manual.map(card).join('');
+    state.manualGroups = groupManualOrders(manual);
+    $('#manual-list').innerHTML = state.manualGroups.map((group, index) => group.orders.length > 1 ? groupCard(group, index) : card(group.orders[0])).join('');
     $('#manual-empty').hidden = manual.length > 0;
     $('#pass-orders').innerHTML = pass.map(card).join('');
     attachOrderInteractions($('#manual-list'));
@@ -299,6 +365,7 @@
     state.erpFile = null;
     state.inventoryFiles = [];
     state.result = null;
+    state.manualGroups = [];
     $('#erp-file').value = '';
     $('#inventory-file').value = '';
     renderFiles();
