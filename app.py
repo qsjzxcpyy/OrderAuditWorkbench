@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
@@ -119,10 +119,14 @@ def process_audit_upload(fields: dict[str, str], files: list[tuple[str, str, byt
             store_files.append({'filename': filename, 'seller': seller, 'rows': len(inventory_rows)})
         if unresolved:
             raise WorkbookDataError('无法识别库存文件对应店铺：' + '、'.join(unresolved))
-        missing = [seller for seller in required_sellers if seller not in inventory_by_store]
+        recognized_sellers = set(STORE_ALIASES.values()) | set(inventory_by_store)
+        missing = [seller for seller in required_sellers if seller in recognized_sellers and seller not in inventory_by_store]
         if missing:
             raise WorkbookDataError('缺少这些有订单店铺的库存文件：' + '、'.join(missing))
-        result = run_audit(order_rows, inventory_by_store)
+        unrecognized_sellers = {
+            str(row.get('seller') or '').strip() for row in order_rows
+        } - recognized_sellers
+        result = run_audit(order_rows, inventory_by_store, unrecognized_sellers=unrecognized_sellers)
 
     run_id = uuid.uuid4().hex
     output = OUTPUT / f'order-audit-{run_id}.xlsx'

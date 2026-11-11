@@ -190,8 +190,10 @@ def run_audit(
     order_rows: Iterable[dict[str, Any]],
     inventory_rows_by_store: dict[str, Iterable[dict[str, Any]]],
     today: date | None = None,
+    unrecognized_sellers: Iterable[str] = (),
 ) -> dict[str, Any]:
     lines = [dict(row) for row in order_rows]
+    unrecognized_sellers = {clean_text(seller) for seller in unrecognized_sellers}
     demand_by_warehouse: dict[str, float] = defaultdict(float)
     order_sku_qty: dict[tuple[str, str], float] = defaultdict(float)
     buyer_orders: dict[tuple[str, str], set[str]] = defaultdict(set)
@@ -233,6 +235,9 @@ def run_audit(
         warehouse = clean_text(line.get('warehouse_sku'))
         qty = normalize_number(line.get('qty'))
         reasons: list[str] = []
+        unrecognized_store = clean_text(line.get('seller')) in unrecognized_sellers
+        if unrecognized_store:
+            reasons.append('订单所属店铺未识别，需要人工处理')
         # Pre-sale is intentionally not inferred from ERP text fields.
         # It is evaluated once per aggregated order from date_latest_ship below.
         matched_presale_values: list[str] = []
@@ -270,14 +275,15 @@ def run_audit(
             stock_rows,
             demand_by_warehouse.get(warehouse, 0),
         )
-        for reason in inventory_reasons:
-            if reason not in reasons:
-                reasons.append(reason)
+        if not unrecognized_store:
+            for reason in inventory_reasons:
+                if reason not in reasons:
+                    reasons.append(reason)
         evidence.update({
             'platform_sku_exact_match': exact_platform_match,
             'inventory_match_type': inventory_match_type,
         })
-        if not exact_platform_match:
+        if not exact_platform_match and not unrecognized_store:
             reasons.append(PLATFORM_SKU_EXACT_REASON)
 
         line_results.append({
