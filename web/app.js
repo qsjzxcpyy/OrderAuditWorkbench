@@ -257,8 +257,6 @@
     $('#kpi-sku').textContent = Object.keys(result.sku_groups || {}).length;
     $('#rail-manual-count').textContent = `${summary.manual_orders || 0} 个订单待处理`;
     $('#rail-pass-count').textContent = `${summary.pass_orders || 0} 个订单可放行`;
-    $('#manual-section-count').textContent = summary.manual_orders || 0;
-    $('#pass-section-count').textContent = summary.pass_orders || 0;
     const resultStores = [...new Set(orders.map((order) => order.seller).filter(Boolean))];
     $('#store-filter').innerHTML = '<option value="">全部店铺</option>' + resultStores.map((store) => `<option value="${esc(store)}">${esc(storeLabel(store))}</option>`).join('');
     const reasons = [...new Set(orders.flatMap((order) => order.reasons || []))].sort();
@@ -269,6 +267,8 @@
     const visible = orders.filter(matches);
     const manual = visible.filter((order) => order.status === 'manual');
     const pass = visible.filter((order) => order.status === 'pass');
+    $('#manual-section-count').textContent = manual.length;
+    $('#pass-section-count').textContent = pass.length;
     state.manualGroups = groupManualOrders(manual);
     $('#manual-list').innerHTML = state.manualGroups.map((group, index) => group.orders.length > 1 ? groupCard(group, index) : card(group.orders[0])).join('');
     $('#manual-empty').hidden = manual.length > 0;
