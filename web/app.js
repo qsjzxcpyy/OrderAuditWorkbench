@@ -1,6 +1,6 @@
 (() => {
   const $ = (selector) => document.querySelector(selector);
-  const state = { erpFile: null, inventoryFiles: [], result: null, busy: false, manualGroups: [] };
+  const state = { erpFile: null, inventoryFiles: [], result: null, busy: false, manualGroups: [], presaleUpdate: null };
   const stores = [
     { value: 'DEMOA_US_US', label: 'DEMOA' },
     { value: 'DEMOC_US', label: 'DEMOC' },
@@ -107,6 +107,12 @@
       ${lineReasons.length ? `<div class="line-reason-note">本商品命中：${lineReasons.map((reason) => `<span>${esc(reason)}</span>`).join('')}</div>` : ''}
     </div>`;
   };
+  const shipDaysLabel = (days) => {
+    if (!Number.isInteger(days)) return '最晚发货日期未知';
+    if (days < 0) return `已逾期 ${num(-days)} 天`;
+    if (days === 0) return '今天是最晚发货日';
+    return `距最晚发货还有 ${num(days)} 天`;
+  };
   const card = (order) => {
     const manual = order.status === 'manual';
     const lines = order.lines || [];
@@ -124,7 +130,7 @@
         <span class="status-rail" aria-hidden="true"></span>
         <span class="order-summary-main">
           <span class="order-topline"><button class="order-number copy-order-number" type="button" data-copy-order="${esc(order.order_no)}" title="\u70b9\u51fb\u590d\u5236\u8ba2\u5355\u53f7">${esc(order.order_no)}</button><span class="order-store">${esc(storeLabel(order.seller))}</span>${order.is_presale ? '<span class="order-presale">\u9884\u552e</span>' : ''}</span>
-          <span class="order-meta"><span>buyer_id <b>${esc(order.buyer_id || '?')}</b></span><span>${lines.length} 个商品明细</span><span class="detail-status ${manual ? 'manual' : 'pass'}">${statusLabel(order.status)}</span></span>
+          <span class="order-meta"><span class="order-ship-days">${shipDaysLabel(order.days_until_latest_ship ?? order.latest_ship_age_days)}</span><span>buyer_id <b>${esc(order.buyer_id || '?')}</b></span><span>${lines.length} 个商品明细</span><span class="detail-status ${manual ? 'manual' : 'pass'}">${statusLabel(order.status)}</span></span>
           <span class="reason-preview">${reasonPreview}</span>
           <span class="order-footer"><span class="expand-hint"><span class="expand-hint-text">${manual ? '向上展开详情' : '展开查看证据'}</span><span class="expand-arrow" aria-hidden="true">⌄</span></span></span>
           <span class="summary-skus">${skuSummary || '<span class="summary-sku-label">无商品明细</span>'}</span>
@@ -132,7 +138,7 @@
       </summary>
       <div class="order-detail">
         <div class="detail-heading"><div><p class="eyebrow">REVIEW NOTES</p><h4>${manual ? '为什么需要人工处理' : '放行依据'}</h4></div><span class="detail-count">${manual ? reasons.length : 0} 条原因</span></div>
-        ${order.date_latest_ship ? `<div class="ship-date-note"><span>最晚发货日期</span><strong>${esc(order.date_latest_ship)}</strong>${order.latest_ship_age_days === null || order.latest_ship_age_days === undefined ? '' : `<em>距最晚发货还有 ${num(order.latest_ship_age_days)} 天</em>`}</div>` : ''}
+        ${order.date_latest_ship ? `<div class="ship-date-note"><span>最晚发货日期</span><strong>${esc(order.date_latest_ship)}</strong></div>` : ''}
         ${reasonList(order, manual)}
         <div class="detail-block"><div class="detail-heading"><div><p class="eyebrow">EVIDENCE</p><h4>库存与价格证据</h4></div><span class="detail-count">${lines.length} 个商品</span></div>${lines.length ? lines.map(lineEvidence).join('') : '<p class="detail-empty">没有可展示的商品明细。</p>'}</div>
         ${order.duplicate_orders?.length ? `<div class="duplicate-note"><strong>关联重复订单</strong><span>${order.duplicate_orders.map((item) => esc(item)).join(' · ')}</span></div>` : ''}
@@ -243,6 +249,21 @@
     };
   };
 
+  const updateResultActions = () => {
+    const result = state.result;
+    const updating = Boolean(result && state.presaleUpdate === result);
+    $('#presale-rule').hidden = !result?.run_id;
+    $('#presale-days').disabled = updating;
+    $('#apply-presale').disabled = updating;
+    $('#apply-presale').textContent = updating ? '正在更新…' : '应用到本批次';
+    $('#copy-button').disabled = updating || !(result?.summary?.manual_orders > 0);
+    const canExport = !updating && Boolean(result?.run_id);
+    $('#export-button').classList.toggle('is-disabled', !canExport);
+    $('#export-button').setAttribute('aria-disabled', String(!canExport));
+    if (canExport) $('#export-button').href = `/api/export/${result.run_id}`;
+    else $('#export-button').removeAttribute('href');
+  };
+
   const renderResults = () => {
     const result = state.result;
     if (!result) return;
@@ -261,8 +282,8 @@
     $('#store-filter').innerHTML = '<option value="">全部店铺</option>' + resultStores.map((store) => `<option value="${esc(store)}">${esc(storeLabel(store))}</option>`).join('');
     const reasons = [...new Set(orders.flatMap((order) => order.reasons || []))].sort();
     $('#reason-filter').innerHTML = '<option value="">全部原因</option>' + reasons.map((reason) => `<option value="${esc(reason)}">${esc(reason)}</option>`).join('');
-    $('#store-filter').value = selectedStore;
-    $('#reason-filter').value = selectedReason;
+    $('#store-filter').value = resultStores.includes(selectedStore) ? selectedStore : '';
+    $('#reason-filter').value = reasons.includes(selectedReason) ? selectedReason : '';
     $('#presale-filter').value = selectedPresale;
     const visible = orders.filter(matches);
     const manual = visible.filter((order) => order.status === 'manual');
@@ -275,9 +296,43 @@
     $('#pass-orders').innerHTML = pass.map(card).join('');
     attachOrderInteractions($('#manual-list'));
     attachOrderInteractions($('#pass-orders'));
-    $('#copy-button').disabled = !(summary.manual_orders > 0);
-    $('#export-button').classList.toggle('is-disabled', !result.run_id);
-    $('#export-button').href = result.run_id ? `/api/export/${result.run_id}` : '#';
+    updateResultActions();
+  };
+  const applyPresale = async (event) => {
+    event.preventDefault();
+    const result = state.result;
+    if (!result?.run_id || state.presaleUpdate === result) return;
+    const input = $('#presale-days');
+    const days = input.valueAsNumber;
+    if (!Number.isSafeInteger(days) || days < 1) {
+      toast('预售判定天数请输入大于等于 1 的整数');
+      return;
+    }
+    if (days === result.presale_days) return;
+    state.presaleUpdate = result;
+    updateResultActions();
+    try {
+      const response = await fetch(`/api/audit/${result.run_id}/presale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presale_days: days }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || '更新预售判定失败');
+      if (state.result !== result) return;
+      state.result = payload;
+      input.value = payload.presale_days;
+      renderResults();
+      toast(`已应用 ${payload.presale_days} 天预售规则，${payload.summary.manual_orders} 个订单需要人工处理`);
+    } catch (error) {
+      if (state.result === result) {
+        input.value = result.presale_days;
+        toast(error.message || '更新预售判定失败');
+      }
+    } finally {
+      if (state.presaleUpdate === result) state.presaleUpdate = null;
+      updateResultActions();
+    }
   };
   const auditFiles = async () => {
     if (!ready()) { toast('请先上传文件并完成店铺匹配'); return; }
@@ -295,6 +350,8 @@
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || '审单失败');
       state.result = payload;
+      $('#presale-days').value = payload.presale_days;
+      $('#presale-filter').value = '';
       renderResults();
       toast(`审单完成：${payload.summary.manual_orders} 个订单需要人工处理`);
       $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -376,12 +433,11 @@
     $('#pass-orders').innerHTML = '';
     $('#manual-empty').hidden = false;
     setManualExpanded(true);
-    $('#copy-button').disabled = true;
-    $('#export-button').classList.add('is-disabled');
-    $('#export-button').href = '#';
+    updateResultActions();
     $('#search-input').value = '';
     $('#store-filter').innerHTML = '<option value="">全部店铺</option>';
     $('#reason-filter').innerHTML = '<option value="">全部原因</option>';
+    $('#presale-filter').value = '';
     $('#pass-orders').hidden = true;
     $('#pass-toggle').setAttribute('aria-expanded', 'false');
     toast('已清空，可开始新一轮审单');
@@ -407,6 +463,7 @@
   $('#audit-button').addEventListener('click', auditFiles);
   $('#demo-button').addEventListener('click', demo);
   $('#copy-button').addEventListener('click', copyOrders);
+  $('#presale-rule').addEventListener('submit', applyPresale);
   $('#reset-button').addEventListener('click', reset);
   $('#manual-toggle').addEventListener('click', () => {
     setManualExpanded($('#manual-toggle').getAttribute('aria-expanded') !== 'true');

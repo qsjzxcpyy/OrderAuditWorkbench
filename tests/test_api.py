@@ -1,5 +1,6 @@
 from pathlib import Path
 from io import BytesIO
+from datetime import date, timedelta
 import http.client
 import json
 import sys
@@ -10,7 +11,7 @@ import openpyxl
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import create_server, detect_seller_from_filename
+from app import RUNS, create_server, detect_seller_from_filename
 
 
 def workbook_bytes(rows, sheet='Data'):
@@ -42,7 +43,8 @@ def multipart(parts):
 
 
 @pytest.fixture
-def running_server():
+def running_server(monkeypatch, tmp_path):
+    monkeypatch.setattr('app.OUTPUT', tmp_path)
     server = create_server(0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -85,8 +87,7 @@ def test_audit_api_returns_results(running_server):
 
 
 @pytest.mark.parametrize('seller', ['NEW_STORE_US', ''])
-def test_unrecognized_order_store_is_manual_without_stopping_other_orders(running_server, monkeypatch, tmp_path, seller):
-    monkeypatch.setattr('app.OUTPUT', tmp_path)
+def test_unrecognized_order_store_is_manual_without_stopping_other_orders(running_server, seller):
     erp = workbook_bytes([
         ['refrence_no_platform', 'platform_seller_id', 'buyer_id', 'sku1', 'warehouse_sku1', 'qty1'],
         ['UNKNOWN-STORE', seller, 'buyer-unknown', 'AMZ-1', 'WH-1', 1],
@@ -154,6 +155,84 @@ def test_missing_inventory_for_recognized_store_still_returns_validation_error(r
         payload = json.loads(response.read())
         assert response.status == 400
         assert payload['error']['message'] == '缺少这些有订单店铺的库存文件：DEMOA_US_US'
+    finally:
+        connection.close()
+
+
+def test_adjusting_presale_days_updates_only_presale_and_keeps_export_in_sync(running_server):
+    today = date.today()
+    erp = workbook_bytes([
+        ['refrence_no_platform', 'platform_seller_id', 'buyer_id', 'sku1', 'warehouse_sku1', 'qty1', 'date_latest_ship'],
+        ['FIVE', 'DEMOA_US_US', 'buyer-1', 'P1', 'W1', 1, today + timedelta(days=5)],
+        ['SIX', 'DEMOA_US_US', 'buyer-2', 'P1', 'W1', 1, today + timedelta(days=6)],
+        ['SEVEN', 'DEMOA_US_US', 'buyer-3', 'P1', 'W1', 1, today + timedelta(days=7)],
+        ['PRICE', 'DEMOA_US_US', 'buyer-4', 'P2', 'W2', 1, today + timedelta(days=5)],
+        ['UNKNOWN', 'DEMO_UNKNOWN', 'buyer-5', 'P3', 'W3', 1, today + timedelta(days=6)],
+    ])
+    inventory = workbook_bytes([
+        ['亚马逊平台sku', '云仓发货sku', '圈买库存', '分销库存', '成本价', '当前分销优惠价价'],
+        ['P1', 'W1', 10, 0, 10, 10],
+        ['P2', 'W2', 0, 10, 10, 16],
+    ])
+    body, content_type = multipart([('erp', 'orders.xlsx', erp), ('inventory', 'DEMOA.xlsx', inventory)])
+    connection = http.client.HTTPConnection(*running_server.server_address)
+    try:
+        connection.request('POST', '/api/audit', body=body, headers={'Content-Type': content_type})
+        response = connection.getresponse()
+        initial = json.loads(response.read())
+        assert response.status == 200, initial
+        assert initial['presale_days'] == 6
+        assert initial['copyable_orders'] == 'SIX SEVEN PRICE UNKNOWN'
+        run_id = initial['run_id']
+
+        def adjust(days, status=200):
+            connection.request('POST', f'/api/audit/{run_id}/presale', body=json.dumps({'presale_days': days}),
+                               headers={'Content-Type': 'application/json'})
+            response = connection.getresponse()
+            payload = json.loads(response.read())
+            assert response.status == status, payload
+            return payload
+
+        assert adjust(5)['copyable_orders'] == 'FIVE SIX SEVEN PRICE UNKNOWN'
+        updated = adjust(7)
+        assert updated['copyable_orders'] == 'SEVEN PRICE UNKNOWN'
+        assert updated['summary']['pass_orders'] == 2
+        assert updated['summary']['manual_orders'] == 3
+        assert updated['summary']['manual_lines'] == 3
+        orders = {item['order_no']: item for item in updated['orders']}
+        assert orders['FIVE']['status'] == 'pass'
+        assert orders['SIX']['days_until_latest_ship'] == 6
+        assert orders['SEVEN']['is_presale'] is True
+        assert '7 天' in orders['SEVEN']['reasons'][0]
+        assert orders['PRICE']['is_presale'] is False
+        assert orders['PRICE']['reasons'] == ['成本价与分销优惠价差异超过 3']
+        assert orders['UNKNOWN']['reasons'] == ['订单所属店铺未识别，需要人工处理']
+        adjust(0, 400)
+
+        connection.request('GET', f'/api/export/{run_id}')
+        response = connection.getresponse()
+        assert response.status == 200
+        workbook = openpyxl.load_workbook(BytesIO(response.read()), read_only=True, data_only=True)
+        try:
+            header, *data = workbook['审单结果'].values
+            rows = {row[0]: dict(zip(header, row)) for row in data}
+            assert rows['FIVE']['审单状态'] == '可放行'
+            assert rows['SIX']['距最晚发货天数'] == 6
+            assert rows['SEVEN']['审单状态'] == '人工处理'
+            assert '7 天' in rows['SEVEN']['人工处理原因']
+            assert rows['PRICE']['人工处理原因'] == orders['PRICE']['reasons'][0]
+        finally:
+            workbook.close()
+
+        restored = adjust(6)
+        assert restored['copyable_orders'] == initial['copyable_orders']
+        assert restored['orders'] == initial['orders']
+
+        RUNS.pop(run_id)
+        connection.request('GET', f'/api/export/{run_id}')
+        response = connection.getresponse()
+        assert response.status == 200
+        assert response.read().startswith(b'PK')
     finally:
         connection.close()
 

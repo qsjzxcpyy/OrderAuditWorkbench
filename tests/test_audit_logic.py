@@ -200,6 +200,7 @@ def test_exact_platform_sku_match_can_pass_and_is_recorded_in_evidence():
 
 def test_latest_ship_date_six_days_in_future_is_presale():
     rows = [
+        order('FOUR_DAYS', buyer='buyer-5', date_latest_ship='2026-09-14'),
         order('FIVE_DAYS', date_latest_ship='2026-09-15'),
         order('SIX_DAYS', buyer='buyer-2', date_latest_ship='2026-09-16'),
         order('SEVEN_DAYS', buyer='buyer-3', date_latest_ship='2026-09-17'),
@@ -217,9 +218,9 @@ def test_latest_ship_date_six_days_in_future_is_presale():
         assert audited['is_presale'] is True
         assert LATEST_SHIP_REASON in audited['reasons']
         assert audited['latest_ship_age_days'] == days
-        assert '6' in LATEST_SHIP_REASON
+        assert '6 天' in LATEST_SHIP_REASON
 
-    for name in ['FIVE_DAYS', 'PAST']:
+    for name in ['FOUR_DAYS', 'FIVE_DAYS', 'PAST']:
         audited = result['orders'][name]
         assert audited['status'] == 'pass'
         assert audited['is_presale'] is False
@@ -228,7 +229,7 @@ def test_latest_ship_date_six_days_in_future_is_presale():
 
 def test_latest_ship_date_fallback_applies_to_every_order_without_short_circuiting():
     rows = [
-        order('INVENTORY-MANUAL', date_latest_ship='2026-09-15'),
+        order('INVENTORY-MANUAL', date_latest_ship='2026-09-14'),
         order('DATE-MANUAL', buyer='buyer-2', date_latest_ship='2026-09-16'),
     ]
     result = run_audit(

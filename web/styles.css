@@ -127,6 +127,10 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
 .kpi-card.kpi-pass strong { color: var(--green); }
 
 .review-panel { margin-top: 18px; padding: 15px; }
+.presale-rule { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--muted); font-size: 13px; }
+.presale-rule[hidden] { display: none; }
+.presale-rule label { color: var(--ink); font-weight: 700; }
+.presale-rule input { width: 5em; min-height: 32px; padding: 4px 7px; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--ink); font: inherit; }
 .filter-bar { display: grid; grid-template-columns: minmax(260px, 1fr) 175px 205px 170px; gap: 9px; padding-bottom: 15px; border-bottom: 1px solid var(--line); }
 .search-field, .select-field { min-height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 4px; background: #fff; color: var(--muted); }
 .search-field > span { color: var(--muted); font-size: 18px; line-height: 1; }
@@ -183,8 +187,8 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
 .order-summary::-webkit-details-marker { display: none; }
 .order-summary-main { min-width: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "top meta" "reason footer" "skus skus"; align-items: center; column-gap: 14px; row-gap: 3px; padding-left: 11px; }
 .order-topline, .order-meta, .order-footer { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.order-topline { grid-area: top; justify-content: flex-start; }
-.order-meta { grid-area: meta; justify-content: flex-end; }
+.order-topline { grid-area: top; justify-content: flex-start; flex-wrap: wrap; }
+.order-meta { grid-area: meta; justify-content: flex-end; flex-wrap: wrap; }
 .order-footer { grid-area: footer; justify-content: flex-end; }
 .reason-preview { grid-area: reason; }
 .order-number { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; background: transparent; color: var(--ink); font: 700 13px/1.2 Consolas, monospace; text-align: left; cursor: copy; }
@@ -217,7 +221,6 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
 .reason-list { margin: 0 0 17px; padding: 0; list-style: none; display: grid; gap: 6px; }
 .ship-date-note { margin: -2px 0 12px; padding: 7px 9px; display: flex; align-items: center; gap: 8px; border: 1px solid #d7e2ed; background: #fff; color: var(--muted); font-size: 11px; }
 .ship-date-note strong { color: var(--ink); font-family: Consolas, monospace; font-size: 14px; }
-.ship-date-note em { margin-left: auto; color: var(--blue-dark); font-style: normal; font-family: Consolas, monospace; font-size: 12px; }
 .reason-list li { position: relative; padding: 8px 10px 8px 25px; border: 1px solid #eed0cc; background: #fffaf9; color: var(--coral); font-size: 12px; }
 .reason-list li::before { content: "!"; position: absolute; left: 10px; top: 8px; width: 12px; height: 12px; display: grid; place-items: center; border-radius: 50%; background: var(--coral); color: #fff; font: 700 9px/1 Consolas, monospace; }
 .pass-reasons li { border-color: #cce4d7; background: #fbfffc; color: var(--green); }
@@ -324,7 +327,6 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
   .summary-sku-qty { grid-column: 2; grid-row: 1 / 3; }
   .sku-identity { grid-template-columns: 1fr; }
   .ship-date-note { flex-wrap: wrap; }
-  .ship-date-note em { margin-left: 0; }
   .evidence-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toast { right: 14px; bottom: 14px; max-width: calc(100vw - 28px); }
 }
@@ -332,3 +334,4 @@ h4 { margin: 0; font-size: 15px; line-height: 1.3; }
   *, *::before { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
 .order-presale { display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid #e5b9a8; border-radius: 3px; color: #a84b2f; background: #fff7f2; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.order-ship-days { color: var(--ink); font-size: 12px; white-space: nowrap; }

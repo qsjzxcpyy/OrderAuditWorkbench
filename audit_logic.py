@@ -9,8 +9,9 @@ from typing import Any, Iterable
 PRICE_TOLERANCE = 3.0
 DISTRIBUTION_LOW_STOCK_LIMIT = 6.0
 DISTRIBUTION_LOW_STOCK_REASON = '\u5206\u9500\u5e93\u5b58\u5c0f\u4e8e\u7b49\u4e8e 6\uff0c\u9700\u8981\u4eba\u5de5\u63d0\u524d\u4e70\u5165'
-LATEST_SHIP_MANUAL_DAYS = 6
-LATEST_SHIP_REASON = '\u9884\u552e\u8ba2\u5355\uff1a\u6700\u665a\u53d1\u8d27\u65e5\u671f\u8ddd\u5f53\u524d\u65e5\u671f\u8fbe 6 \u5929\u53ca\u4ee5\u4e0a'
+DEFAULT_PRESALE_DAYS = 6
+LATEST_SHIP_REASON_TEMPLATE = '预售订单：距最晚发货还有 {days} 天及以上'
+LATEST_SHIP_REASON = LATEST_SHIP_REASON_TEMPLATE.format(days=DEFAULT_PRESALE_DAYS)
 PRESALE_REASON = '\u9884\u552e\u8ba2\u5355'
 PLATFORM_SKU_EXACT_REASON = '\u5e97\u94fa SKU \u672a\u7cbe\u786e\u5339\u914d\uff0c\u9700\u8981\u4eba\u5de5\u786e\u8ba4'
 DUPLICATE_PRODUCT_REASON = '\u540c\u4e00\u7528\u6237\u91cd\u590d\u8d2d\u4e70\u540c\u4e00\u4ea7\u54c1'
@@ -307,10 +308,7 @@ def run_audit(
                 'buyer_id': line.get('buyer_id', ''),
                 'date_latest_ship': clean_text(line.get('date_latest_ship')),
                 'latest_ship_age_days': None,
-                'is_presale': False,
                 'presale_matches': [],
-                'status': 'pass',
-                'reasons': [],
                 'duplicate_orders': [],
                 'lines': [],
             }
@@ -318,24 +316,15 @@ def run_audit(
         if not order.get('date_latest_ship') and line.get('date_latest_ship'):
             order['date_latest_ship'] = clean_text(line.get('date_latest_ship'))
         order['lines'].append(line)
-        if line.get('is_presale'):
-            order['is_presale'] = True
         for match in line.get('presale_matches', []):
             if match not in order['presale_matches']:
                 order['presale_matches'].append(match)
-        if line['status'] == 'manual':
-            order['status'] = 'manual'
-        for reason in line['reasons']:
-            if reason not in order['reasons']:
-                order['reasons'].append(reason)
         for duplicate in line['duplicate_orders']:
             if duplicate not in order['duplicate_orders']:
                 order['duplicate_orders'].append(duplicate)
 
-    # Final fallback: evaluate every aggregated order after all existing rules.
-    # Pre-sale is based exclusively on date_latest_ship. For multi-line orders,
-    # use the furthest latest ship date. This pass never short-circuits the
-    # inventory, duplicate-order, or quantity checks above.
+    today = today or date.today()
+    # Use the furthest valid ship date for a multi-line order.
     for order in orders.values():
         line_dates = [
             (days_until_latest_ship(line.get('date_latest_ship'), today), line.get('date_latest_ship'))
@@ -353,13 +342,6 @@ def run_audit(
         # Keep the existing response key for frontend/export compatibility while
         # correcting its meaning to "days until shipment".
         order['latest_ship_age_days'] = days_until_ship
-        order['is_presale'] = bool(
-            days_until_ship is not None and days_until_ship >= LATEST_SHIP_MANUAL_DAYS
-        )
-        if order['is_presale']:
-            order['status'] = 'manual'
-            if LATEST_SHIP_REASON not in order['reasons']:
-                order['reasons'].append(LATEST_SHIP_REASON)
 
     sku_groups: dict[str, dict[str, Any]] = {}
     for sku, demand in demand_by_warehouse.items():
@@ -374,18 +356,47 @@ def run_audit(
             'order_numbers': sorted({line['order_no'] for line in group_lines}),
         }
 
-    manual_orders = [order for order in orders.values() if order['status'] == 'manual']
-    pass_orders = [order for order in orders.values() if order['status'] == 'pass']
-    return {
+    return apply_presale_threshold({
         'orders': orders,
         'lines': line_results,
         'sku_groups': sku_groups,
+    }, DEFAULT_PRESALE_DAYS)
+
+
+def apply_presale_threshold(result: dict[str, Any], presale_days: int) -> dict[str, Any]:
+    """Reclassify orders from the original line checks and saved ship dates."""
+    if type(presale_days) is not int or presale_days < 1:
+        raise ValueError('预售判定天数请输入大于等于 1 的整数。')
+
+    presale_reason = LATEST_SHIP_REASON_TEMPLATE.format(days=presale_days)
+    orders = {}
+    manual_orders = manual_lines = 0
+    for order_no, order in result['orders'].items():
+        days_until_ship = order['days_until_latest_ship']
+        is_presale = days_until_ship is not None and days_until_ship >= presale_days
+        reasons = list(dict.fromkeys(reason for line in order['lines'] for reason in line['reasons']))
+        if is_presale:
+            reasons.append(presale_reason)
+        if reasons:
+            manual_orders += 1
+            manual_lines += len(order['lines'])
+        orders[order_no] = {
+            **order,
+            'is_presale': is_presale,
+            'status': 'manual' if reasons else 'pass',
+            'reasons': reasons,
+        }
+
+    return {
+        **result,
+        'orders': orders,
+        'presale_days': presale_days,
         'summary': {
             'total_orders': len(orders),
-            'manual_orders': len(manual_orders),
-            'pass_orders': len(pass_orders),
-            'total_lines': len(line_results),
-            'manual_lines': sum(1 for line in line_results if line['status'] == 'manual'),
+            'manual_orders': manual_orders,
+            'pass_orders': len(orders) - manual_orders,
+            'total_lines': len(result['lines']),
+            'manual_lines': manual_lines,
         },
     }
 

@@ -109,6 +109,14 @@
           </div>
         </div>
 
+        <form class="presale-rule" id="presale-rule" hidden>
+          <label for="presale-days">预售判定</label>
+          <span>距最晚发货还有</span>
+          <input id="presale-days" type="number" min="1" step="1" required aria-label="预售判定天数">
+          <span>天及以上</span>
+          <button class="button button-secondary" id="apply-presale" type="submit">应用到本批次</button>
+        </form>
+
         <div class="review-panel">
           <div class="filter-bar">
             <label class="search-field"><span aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="模糊搜索订单号、SKU、buyer_id（如 2339）" aria-label="模糊搜索订单号、平台 SKU、云仓 SKU 或 buyer_id" title="支持输入 SKU 片段，例如输入 2339 可匹配 W2339 开头的云仓 SKU，不区分大小写。"></label>

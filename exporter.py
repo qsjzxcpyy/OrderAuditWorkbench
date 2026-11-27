@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +26,8 @@ RESULT_HEADERS = [
     ('reasons_text', '人工处理原因'),
     ('duplicate_orders_text', '相关重复订单号'),
     ('audited_at', '审单时间'),
+    ('date_latest_ship', '最晚发货日期'),
+    ('days_until_latest_ship', '距最晚发货天数'),
 ]
 
 
@@ -61,7 +63,12 @@ def export_result(result: dict[str, Any], output_path: str | Path) -> Path:
         cell.font = header_font
         cell.alignment = Alignment(horizontal='center', vertical='center')
     for line in result.get('lines', []):
-        row = [_value(line, key, result.get('sku_groups', {})) for key, _ in RESULT_HEADERS]
+        order = result['orders'][line['order_no']]
+        detail_line = {**line, **{
+            key: order[key]
+            for key in ('status', 'reasons', 'date_latest_ship', 'days_until_latest_ship')
+        }}
+        row = [_value(detail_line, key, result.get('sku_groups', {})) for key, _ in RESULT_HEADERS]
         detail.append(row)
     for row in detail.iter_rows(min_row=2):
         for cell in row:
@@ -69,7 +76,7 @@ def export_result(result: dict[str, Any], output_path: str | Path) -> Path:
             cell.alignment = Alignment(vertical='top', wrap_text=True)
     detail.freeze_panes = 'A2'
     detail.auto_filter.ref = detail.dimensions
-    widths = [22, 18, 18, 24, 22, 12, 18, 12, 12, 12, 16, 12, 12, 44, 24, 20]
+    widths = [22, 18, 18, 24, 22, 12, 18, 12, 12, 12, 16, 12, 12, 44, 24, 20, 23, 17]
     for index, width in enumerate(widths, 1):
         detail.column_dimensions[get_column_letter(index)].width = width
 

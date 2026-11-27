@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from audit_logic import copyable_manual_order_numbers, run_audit
+from audit_logic import apply_presale_threshold, copyable_manual_order_numbers, run_audit
 from exporter import export_result
 from workbooks import WorkbookDataError, parse_erp_workbook, parse_inventory_workbook
 
@@ -76,8 +76,16 @@ def parse_multipart(content_type: str, body: bytes) -> tuple[dict[str, str], lis
     return fields, files
 
 
-def _order_json(order: dict[str, Any]) -> dict[str, Any]:
-    return order
+def audit_response(run_id: str, result: dict[str, Any], store_files: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        'run_id': run_id,
+        'presale_days': result['presale_days'],
+        'summary': result['summary'],
+        'sku_groups': result['sku_groups'],
+        'orders': list(result['orders'].values()),
+        'store_files': store_files,
+        'copyable_orders': copyable_manual_order_numbers(result),
+    }
 
 
 def process_audit_upload(fields: dict[str, str], files: list[tuple[str, str, bytes]]) -> tuple[str, dict[str, Any]]:
@@ -131,16 +139,8 @@ def process_audit_upload(fields: dict[str, str], files: list[tuple[str, str, byt
     run_id = uuid.uuid4().hex
     output = OUTPUT / f'order-audit-{run_id}.xlsx'
     export_result(result, output)
-    RUNS[run_id] = {'result': result, 'output': output, 'store_files': store_files}
-    response = {
-        'run_id': run_id,
-        'summary': result['summary'],
-        'sku_groups': result['sku_groups'],
-        'orders': [_order_json(order) for order in result['orders'].values()],
-        'store_files': store_files,
-        'copyable_orders': copyable_manual_order_numbers(result),
-    }
-    return run_id, response
+    RUNS[run_id] = {'result': result, 'output': output, 'store_files': store_files, 'lock': threading.Lock()}
+    return run_id, audit_response(run_id, result, store_files)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -174,10 +174,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._static(parsed.path[1:], mimetypes.guess_type(parsed.path)[0] or 'text/plain; charset=utf-8')
         match = re.fullmatch(r'/api/export/([a-f0-9]+)', parsed.path)
         if match:
-            run = RUNS.get(match.group(1))
-            if not run or not run['output'].exists():
+            run_id = match.group(1)
+            run = RUNS.get(run_id)
+            try:
+                if run:
+                    with run['lock']:
+                        content = run['output'].read_bytes()
+                else:
+                    # A saved export remains available to the original link after a restart.
+                    content = (OUTPUT / f'order-audit-{run_id}.xlsx').read_bytes()
+            except FileNotFoundError:
                 return self._json(404, {'error': {'message': '找不到这次审单结果。'}})
-            return self._send(200, run['output'].read_bytes(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', {
+            return self._send(200, content, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', {
                 'Content-Disposition': 'attachment; filename="order-audit-result.xlsx"',
             })
         return self._json(404, {'error': {'message': '页面不存在。'}})
@@ -204,6 +212,9 @@ class Handler(BaseHTTPRequestHandler):
                 fields, files = parse_multipart(self.headers.get('Content-Type', ''), body)
                 _, payload = process_audit_upload(fields, files)
                 return self._json(200, payload)
+            match = re.fullmatch(r'/api/audit/([a-f0-9]+)/presale', parsed.path)
+            if match:
+                return self._update_presale(match.group(1), body)
             if parsed.path == '/api/copy-orders':
                 payload = json.loads(body.decode('utf-8'))
                 numbers = []
@@ -217,6 +228,23 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             return self._json(500, {'error': {'message': f'审单失败：{exc}'}})
         return self._json(404, {'error': {'message': '接口不存在。'}})
+
+    def _update_presale(self, run_id: str, body: bytes):
+        run = RUNS.get(run_id)
+        if not run:
+            return self._json(404, {'error': {'message': '找不到这次审单结果，请重新审单。'}})
+        payload = json.loads(body)
+        days = payload.get('presale_days') if isinstance(payload, dict) else None
+        with run['lock']:
+            result = apply_presale_threshold(run['result'], days)
+            if days != run['result']['presale_days']:
+                output = run['output']
+                # Replace the previous export only after the new workbook is complete.
+                with tempfile.TemporaryDirectory(dir=output.parent) as temp_dir:
+                    updated_output = export_result(result, Path(temp_dir) / output.name)
+                    updated_output.replace(output)
+                run['result'] = result
+        return self._json(200, audit_response(run_id, result, run['store_files']))
 
 
 def create_server(port: int = 8793, host: str = '127.0.0.1') -> ThreadingHTTPServer:
